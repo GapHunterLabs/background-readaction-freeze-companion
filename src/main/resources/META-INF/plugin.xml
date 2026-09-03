@@ -1,0 +1,55 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <id>dev.gaphunter.backgroundreadactionfreezecompanion</id>
+    <name>Background ReadAction Freeze Companion</name>
+    <vendor>Gap Hunter Labs</vendor>
+    <description><![CDATA[
+        <p>Flags a background-thread entry point (a `Task.Backgroundable`
+        override, an `Application#executeOnPooledThread(...)` task, or a
+        task submitted to `AppExecutorUtil`'s pooled executor) that can
+        reach a blocking, non-cancellable read-lock call -- either
+        directly, or transitively through a project method whose own
+        summary already proves it. Two tiers, both verified against the
+        real `intellij-community` source rather than assumed: Tier 1
+        (`ReadAction.compute()`/`run()`/`computeCancellable()`) is
+        formally `@Deprecated`; Tier 2 (`Application#runReadAction(...)`)
+        is not formally deprecated, but its own Javadoc says "Avoid
+        using this method directly in applied/plugins code" -- it's the
+        same blocking, non-cancellable read lock underneath.</p>
+        <p>Motivated by JetBrains' own Platform Blog: "Investigating
+        IntelliJ Platform UI Freezes" (Sept 2025) and "UI Freezes and
+        the Dangers of Non-Cancellable Read Actions in Background
+        Threads" (March 2026), which states that "many reports actually
+        show problems in plugins that contain that single erroneous
+        pattern" -- and that detection today is manual, post-mortem
+        thread-dump analysis, not static prevention. This plugin is an
+        attempt at the static side.</p>
+        <p>Interprocedural: reuses the same real, from-scratch Tarjan's
+        SCC algorithm and whole-project fixed-point summary computation
+        already proven in this catalog's Log Injection Companion and
+        Interprocedural Resource Leak Companion, applied to a simpler
+        reachability lattice.</p>
+        <p>Stated honestly: v0.1 only Java PSI (no Kotlin coroutines --
+        `Dispatchers.Default`/`IO` entry points are out of scope);
+        `call.resolveMethod()` resolves a virtual call to a single
+        candidate (no CHA, no points-to, same caveat already accepted
+        catalog-wide); a project with more than 3,000 analyzable methods
+        skips analysis entirely; a hit where the same method also calls
+        `checkCanceled()` is downgraded to a weaker warning, not
+        suppressed -- the write lock can still block.</p>
+        <p>Free. No license nags, no telemetry, no network calls.</p>
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.java</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <localInspection language="JAVA"
+            groupName="Background ReadAction Freeze Companion"
+            displayName="Background thread reaches a non-cancellable ReadAction"
+            enabledByDefault="true"
+            level="WARNING"
+            implementationClass="dev.gaphunter.backgroundreadactionfreezecompanion.inspection.BackgroundReadActionFreezeInspection"/>
+        <notificationGroup id="Background ReadAction Freeze Companion" displayType="BALLOON"/>
+    </extensions>
+</idea-plugin>
