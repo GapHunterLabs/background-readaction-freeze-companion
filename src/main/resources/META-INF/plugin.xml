@@ -5,9 +5,10 @@
     <vendor>Gap Hunter Labs</vendor>
     <description><![CDATA[
         <p>Flags a background-thread entry point (a `Task.Backgroundable`
-        override, an `Application#executeOnPooledThread(...)` task, or a
-        task submitted to `AppExecutorUtil`'s pooled executor) that can
-        reach a blocking, non-cancellable read-lock call -- either
+        override, an `Application#executeOnPooledThread(...)` task, a
+        task submitted to `AppExecutorUtil`'s pooled executor, or a task
+        passed to `BackgroundTaskUtil#executeOnPooledThread(...)`) that
+        can reach a blocking, non-cancellable read-lock call -- either
         directly, or transitively through a project method whose own
         summary already proves it. Two tiers, both verified against the
         real `intellij-community` source rather than assumed: Tier 1
@@ -29,7 +30,13 @@
         already proven in this catalog's Log Injection Companion and
         Interprocedural Resource Leak Companion, applied to a simpler
         reachability lattice.</p>
-        <p>Stated honestly: v0.1 only Java PSI (no Kotlin coroutines --
+        <p>Validated by hand against real code from `intellij-community`
+        itself (`plugins/hg4idea`): confirmed a real EDT-reachable call
+        correctly NOT flagged (no false positive), and found the
+        `BackgroundTaskUtil#executeOnPooledThread` entry point missing
+        from the original 3-entry list -- added rather than left as a
+        documented gap.</p>
+        <p>Stated honestly: Java PSI only (no Kotlin coroutines --
         `Dispatchers.Default`/`IO` entry points are out of scope);
         `call.resolveMethod()` resolves a virtual call to a single
         candidate (no CHA, no points-to, same caveat already accepted

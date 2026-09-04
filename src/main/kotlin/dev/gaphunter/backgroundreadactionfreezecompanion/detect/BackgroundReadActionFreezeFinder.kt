@@ -7,17 +7,23 @@ import com.intellij.psi.PsiMethodCallExpression
 import dev.gaphunter.backgroundreadactionfreezecompanion.model.BackgroundReadActionFreezeHit
 
 /**
- * Finds the three IntelliJ Platform SDK background-thread entry points
- * this plugin's v0.1 covers ([BackgroundEntryPointSignals]) and, for
- * each, checks whether it can reach a [ReadActionSinkSignals] call:
+ * Finds the four IntelliJ Platform SDK background-thread entry points
+ * this plugin covers ([BackgroundEntryPointSignals]) and, for each,
+ * checks whether it can reach a [ReadActionSinkSignals] call:
  *
  * - S1 (`Task.Backgroundable.run()` override): a real named [PsiMethod]
  *   already tracked by [ProjectReadActionReachabilityAnalyzer]'s
  *   whole-project pass -- look its own summary up directly.
- * - S2/S3 (a lambda/anonymous-class argument): NOT a named project
+ * - S2/S3/S4 (a lambda/anonymous-class argument): NOT a named project
  *   method the whole-project pass tracks as a graph node, so its body
  *   ([BackgroundArgumentBody]) is scanned ad hoc, against the SAME
  *   summaries map, via [ProjectReadActionReachabilityAnalyzer.reachabilityOfArgumentBody].
+ *   The Runnable/Callable argument's position varies by call shape
+ *   (`Application#executeOnPooledThread(Runnable)` vs.
+ *   `BackgroundTaskUtil.executeOnPooledThread(Disposable, Runnable)`),
+ *   so every argument is tried and the first one whose body actually
+ *   resolves ([BackgroundArgumentBody.bodyOf] returning non-null) wins
+ *   -- never a hardcoded index.
  */
 object BackgroundReadActionFreezeFinder {
 
@@ -39,10 +45,10 @@ object BackgroundReadActionFreezeFinder {
                 val description = when {
                     BackgroundEntryPointSignals.isExecuteOnPooledThreadCall(call) -> "This task passed to Application#executeOnPooledThread(...)"
                     BackgroundEntryPointSignals.isAppExecutorSubmitCall(call) -> "This task submitted to AppExecutorUtil's pooled executor"
+                    BackgroundEntryPointSignals.isBackgroundTaskUtilExecuteOnPooledThreadCall(call) -> "This task passed to BackgroundTaskUtil#executeOnPooledThread(...)"
                     else -> return
                 }
-                val argument = call.argumentList.expressions.firstOrNull() ?: return
-                val body = BackgroundArgumentBody.bodyOf(argument) ?: return
+                val body = call.argumentList.expressions.firstNotNullOfOrNull { BackgroundArgumentBody.bodyOf(it) } ?: return
                 val summary = ProjectReadActionReachabilityAnalyzer.reachabilityOfArgumentBody(body, summaries) ?: return
                 hits += toHit(summary, description)
             }

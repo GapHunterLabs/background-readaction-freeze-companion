@@ -151,6 +151,30 @@ class BackgroundReadActionFreezeInspectionTest : BasePlatformTestCase() {
             }
             """.trimIndent(),
         )
+        myFixture.addFileToProject(
+            "com/intellij/openapi/Disposable.java",
+            """
+            package com.intellij.openapi;
+            public interface Disposable {
+            }
+            """.trimIndent(),
+        )
+        // S4, added after Fase 3 manual validation against real intellij-community
+        // code (plugins/hg4idea) found this real, distinct entry point missing
+        // from v0.1's original 3-entry closed list.
+        myFixture.addFileToProject(
+            "com/intellij/util/concurrency/BackgroundTaskUtil.java",
+            """
+            package com.intellij.util.concurrency;
+
+            import com.intellij.openapi.Disposable;
+
+            public class BackgroundTaskUtil {
+                public static void executeOnPooledThread(Disposable parentDisposable, Runnable runnable) {
+                }
+            }
+            """.trimIndent(),
+        )
     }
 
     fun `test a Task Backgroundable run override calling ReadAction compute directly is flagged tier 1`() {
@@ -390,5 +414,33 @@ class BackgroundReadActionFreezeInspectionTest : BasePlatformTestCase() {
         )
         val highlights = myFixture.doHighlighting()
         assertTrue(highlights.any { it.description?.contains("AppExecutorUtil's pooled executor") == true })
+    }
+
+    /**
+     * S4 -- mirrors the exact real shape found via Fase 3 manual
+     * validation against `intellij-community`'s `plugins/hg4idea`
+     * (`HgRepositoryImpl.update()`: `BackgroundTaskUtil.executeOnPooledThread(this, () -> ...)`),
+     * confirming v0.1's original 3-entry closed list was incomplete
+     * against real code, not just synthetic examples.
+     */
+    fun `test a task passed to BackgroundTaskUtil executeOnPooledThread reaching ReadAction compute is flagged`() {
+        myFixture.configureByText(
+            "Launcher10.java",
+            """
+            import com.intellij.openapi.Disposable;
+            import com.intellij.openapi.application.ReadAction;
+            import com.intellij.util.concurrency.BackgroundTaskUtil;
+
+            class Launcher10 implements Disposable {
+                void launch() {
+                    BackgroundTaskUtil.executeOnPooledThread(this, () -> {
+                        ReadAction.compute(() -> 1);
+                    });
+                }
+            }
+            """.trimIndent(),
+        )
+        val highlights = myFixture.doHighlighting()
+        assertTrue(highlights.any { it.description?.contains("BackgroundTaskUtil#executeOnPooledThread") == true })
     }
 }
