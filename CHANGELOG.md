@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- S4: `BackgroundTaskUtil#executeOnPooledThread(...)` as a recognized
+  background-thread entry point, found via manual validation against
+  real `intellij-community` code (`plugins/hg4idea`) -- the original
+  3-entry list proved incomplete against the first real sample checked.
+
 ## [0.1.0]
 
 ### Added

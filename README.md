@@ -39,17 +39,39 @@ proven in this catalog's Log Injection Companion and Interprocedural
 Resource Leak Companion, applied to a simpler reachability lattice (one
 summary per method, not per parameter).
 
-## Stated honestly -- v0.1 scope
+## Validated against real intellij-community code
+
+Fase 3 of this plugin's build checked out `plugins/hg4idea` from
+`intellij-community` itself (branch `252`, matching the SDK version this
+plugin targets) and traced two real candidate call sites by hand:
+
+- `HgUtil.markFileDirty()` calls `Application#runReadAction(...)` (Tier
+  2) -- but its only caller runs on the EDT (`AnAction.actionPerformed`),
+  not a background thread. Correctly NOT flagged -- confirms the
+  detector avoids a real, plausible false positive, not just synthetic
+  ones.
+- `HgRepositoryImpl.getInstance()` calls `ReadAction.run()` (Tier 1) in
+  the same method that already calls `ProgressManager.checkCanceled()`
+  -- the exact "downgrade, don't suppress" scenario, found occurring
+  naturally in real code, not just in a synthetic test.
+- `HgRepositoryImpl.update()` uses `BackgroundTaskUtil#executeOnPooledThread(...)`
+  -- a real, distinct background entry point missing from the original
+  3-entry list. **Added as S4** rather than left as a documented gap.
+
+## Stated honestly -- scope
 
 - **Java PSI only.** No Kotlin coroutines (`Dispatchers.Default`/`IO`) --
   this catalog's interprocedural machinery has never been extended to
   Kotlin PSI. A real, declared limitation, not a silent gap.
-- **Three background entry points, a closed list**: a `Task.Backgroundable`
+- **Four background entry points, a closed list**: a `Task.Backgroundable`
   `run(ProgressIndicator)` override, a task passed to
-  `Application#executeOnPooledThread(...)`, or a task submitted to
+  `Application#executeOnPooledThread(...)`, a task submitted to
   `AppExecutorUtil`'s pooled executor (one hop of variable indirection
-  resolved, no deeper alias tracking). Not `com.intellij.util.Alarm`,
-  not reflection/extension-point invocation, not a custom `ExecutorService`.
+  resolved, no deeper alias tracking), or a task passed to
+  `BackgroundTaskUtil#executeOnPooledThread(...)`. This list already grew
+  once against real code -- more gaps of the same shape are plausible.
+  Not `com.intellij.util.Alarm`, not reflection/extension-point
+  invocation, not a custom `ExecutorService`.
 - **Two sink tiers, verified against the real `intellij-community` source**,
   not assumed: Tier 1 (`ReadAction.compute()`/`run()`/`computeCancellable()`)
   is formally `@Deprecated`. Tier 2 (`Application#runReadAction(...)`) is
