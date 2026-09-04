@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+## [0.2.1]
+
+### Fixed
+
+- The interprocedural fixed-point reachability computation (whole-project
+  Tarjan-SCC + per-file scan) now checks for cancellation
+  (`ProgressManager.checkCanceled()`) once per file and once per
+  fixed-point iteration -- a large real project could previously block
+  the read action uncancellably while the user kept typing. The same
+  catalog-wide gap this plugin's own analysis is built to catch, found
+  missing in this plugin's own engine during a Workstream 1 review.
+
 ## [0.2.0]
 
 ### Added
@@ -28,6 +40,7 @@
 - Downgrades, rather than suppresses, a hit where the same method also
   checks for cancellation explicitly.
 
-[Unreleased]: https://github.com/GapHunterLabs/background-readaction-freeze-companion/compare/0.2.0...HEAD
+[Unreleased]: https://github.com/GapHunterLabs/background-readaction-freeze-companion/compare/0.2.1...HEAD
+[0.2.1]: https://github.com/GapHunterLabs/background-readaction-freeze-companion/compare/0.2.0...0.2.1
 [0.2.0]: https://github.com/GapHunterLabs/background-readaction-freeze-companion/compare/0.1.0...0.2.0
 [0.1.0]: https://github.com/GapHunterLabs/background-readaction-freeze-companion/commits/0.1.0
