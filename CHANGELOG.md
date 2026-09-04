@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.2.0]
+
 ### Added
 
 - S4: `BackgroundTaskUtil#executeOnPooledThread(...)` as a recognized
@@ -26,5 +28,6 @@
 - Downgrades, rather than suppresses, a hit where the same method also
   checks for cancellation explicitly.
 
-[Unreleased]: https://github.com/GapHunterLabs/background-readaction-freeze-companion/compare/0.1.0...HEAD
+[Unreleased]: https://github.com/GapHunterLabs/background-readaction-freeze-companion/compare/0.2.0...HEAD
+[0.2.0]: https://github.com/GapHunterLabs/background-readaction-freeze-companion/compare/0.1.0...0.2.0
 [0.1.0]: https://github.com/GapHunterLabs/background-readaction-freeze-companion/commits/0.1.0
