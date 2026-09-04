@@ -1,5 +1,6 @@
 package dev.gaphunter.backgroundreadactionfreezecompanion.detect
 
+import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
 import com.intellij.psi.JavaRecursiveElementWalkingVisitor
@@ -45,6 +46,16 @@ data class ReachabilitySummary(
  * arguments, it's simply "can executing this method's body reach the
  * sink at all".
  *
+ * **Cancellable, per catalog-wide precedent:** this computation runs
+ * inside a `LocalInspectionTool`'s read action, but a pure in-memory
+ * fixed-point loop is not automatically interruptible -- a large real
+ * project could otherwise block the read action uncancellably while
+ * the user keeps typing. [ProgressManager.checkCanceled] is called
+ * once per file during the initial scan and once per outer
+ * fixed-point iteration per SCC (same discipline as
+ * `interface-resource-close-divergence-companion`'s own analyzer,
+ * retrofitted here after a catalog-wide review found it missing).
+ *
  * **v0.1 scope, stated honestly:** only project methods (a call into a
  * compiled library/dependency, including any platform SDK method
  * beyond the [ReadActionSinkSignals]/[BackgroundEntryPointSignals]
@@ -87,6 +98,7 @@ object ProjectReadActionReachabilityAnalyzer {
 
         val allMethods = mutableListOf<PsiMethod>()
         for (virtualFile in files) {
+            ProgressManager.checkCanceled()
             val psiFile = psiManager.findFile(virtualFile) as? PsiJavaFile ?: continue
             if (psiFile.text.length > MAX_FILE_LENGTH) continue
             psiFile.accept(object : JavaRecursiveElementWalkingVisitor() {
@@ -106,6 +118,7 @@ object ProjectReadActionReachabilityAnalyzer {
         for (scc in sccsCalleesFirst) {
             var changed = true
             while (changed) {
+                ProgressManager.checkCanceled()
                 changed = false
                 for (method in scc) {
                     val previous = summaries[method]
