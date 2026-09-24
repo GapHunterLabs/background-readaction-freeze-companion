@@ -58,6 +58,19 @@ plugin targets) and traced two real candidate call sites by hand:
   -- a real, distinct background entry point missing from the original
   3-entry list. **Added as S4** rather than left as a documented gap.
 
+## A real finding, reported upstream
+
+Pointed at `java/execution/impl` (the module behind Java test execution),
+the detector surfaced a real instance of this pattern in
+`SearchForTestsTask`, a `Task.Backgroundable`: one branch uses the
+cancellable `ReadAction.nonBlocking(...)`, while a sibling branch a few
+lines later calls the non-cancellable `ReadAction.run(...)` on the
+background thread. It was reported to JetBrains as
+[IDEA-393501](https://youtrack.jetbrains.com/issue/IDEA-393501) --
+"SearchForTestsTask: non-cancellable ReadAction.run() in a background
+task" (originally IJPL-254654). At the time of writing it is open: a
+reported finding, not a confirmed defect.
+
 ## Stated honestly -- scope
 
 - **Java PSI only.** No Kotlin coroutines (`Dispatchers.Default`/`IO`) --
