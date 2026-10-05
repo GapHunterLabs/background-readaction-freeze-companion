@@ -41,7 +41,7 @@ summary per method, not per parameter).
 
 ## Validated against real intellij-community code
 
-Fase 3 of this plugin's build checked out `plugins/hg4idea` from
+A validation pass during this plugin's build checked out `plugins/hg4idea` from
 `intellij-community` itself (branch `252`, matching the SDK version this
 plugin targets) and traced two real candidate call sites by hand:
 
