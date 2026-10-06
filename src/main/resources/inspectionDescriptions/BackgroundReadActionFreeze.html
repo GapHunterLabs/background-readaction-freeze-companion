@@ -1,0 +1,13 @@
+<html>
+<body>
+Reports a background-thread entry point (a <code>Task.Backgroundable</code> override, a task passed to
+<code>Application#executeOnPooledThread</code>, to the <code>AppExecutorUtil</code> pooled executor, or to
+<code>BackgroundTaskUtil#executeOnPooledThread</code>) that can reach a blocking, non-cancellable read action, directly or
+through a project method.
+<!-- tooltip end -->
+<p>A blocking read action on a background thread makes pending write actions wait, which can freeze the editor.
+Two tiers are reported: <code>ReadAction.compute()</code>/<code>run()</code>/<code>computeCancellable()</code>, which are
+deprecated, and <code>Application#runReadAction(...)</code>, whose documentation advises against this use. A non-blocking
+read action (<code>ReadAction.nonBlocking(...)</code>) yields to writes and follows cancellation.</p>
+</body>
+</html>
