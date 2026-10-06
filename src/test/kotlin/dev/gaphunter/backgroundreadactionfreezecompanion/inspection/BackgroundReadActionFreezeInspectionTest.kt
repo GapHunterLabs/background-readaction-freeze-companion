@@ -104,6 +104,13 @@ class BackgroundReadActionFreezeInspectionTest : BasePlatformTestCase() {
                     return null;
                 }
 
+                public static <T> T computeBlocking(Callable<T> action) {
+                    return null;
+                }
+
+                public static void runBlocking(Runnable action) {
+                }
+
                 public static <T> T nonBlocking(Callable<T> action) {
                     return null;
                 }
@@ -159,7 +166,7 @@ class BackgroundReadActionFreezeInspectionTest : BasePlatformTestCase() {
             }
             """.trimIndent(),
         )
-        // S4, added after Fase 3 manual validation against real intellij-community
+        // S4, added after manual validation against real intellij-community
         // code (plugins/hg4idea) found this real, distinct entry point missing
         // from v0.1's original 3-entry closed list.
         myFixture.addFileToProject(
@@ -172,6 +179,30 @@ class BackgroundReadActionFreezeInspectionTest : BasePlatformTestCase() {
             public class BackgroundTaskUtil {
                 public static void executeOnPooledThread(Disposable parentDisposable, Runnable runnable) {
                 }
+            }
+            """.trimIndent(),
+        )
+        // 0.3.0: sinks and the S5 entry point verified against the current intellij-community source.
+        myFixture.addFileToProject(
+            "com/intellij/openapi/project/DumbService.java",
+            """
+            package com.intellij.openapi.project;
+
+            public abstract class DumbService {
+                public static DumbService getInstance(Project project) {
+                    return null;
+                }
+
+                public void runReadActionInSmartMode(Runnable runnable) {
+                }
+            }
+            """.trimIndent(),
+        )
+        myFixture.addFileToProject(
+            "com/intellij/util/concurrency/annotations/RequiresBackgroundThread.java",
+            """
+            package com.intellij.util.concurrency.annotations;
+            public @interface RequiresBackgroundThread {
             }
             """.trimIndent(),
         )
@@ -417,7 +448,7 @@ class BackgroundReadActionFreezeInspectionTest : BasePlatformTestCase() {
     }
 
     /**
-     * S4 -- mirrors the exact real shape found via Fase 3 manual
+     * S4 -- mirrors the exact real shape found via manual
      * validation against `intellij-community`'s `plugins/hg4idea`
      * (`HgRepositoryImpl.update()`: `BackgroundTaskUtil.executeOnPooledThread(this, () -> ...)`),
      * confirming v0.1's original 3-entry closed list was incomplete
@@ -442,5 +473,119 @@ class BackgroundReadActionFreezeInspectionTest : BasePlatformTestCase() {
         )
         val highlights = myFixture.doHighlighting()
         assertTrue(highlights.any { it.description?.contains("BackgroundTaskUtil#executeOnPooledThread") == true })
+    }
+
+    /** 0.3.0: computeBlocking is not deprecated -- the message must quote its own documentation, not say "deprecated". */
+    fun `test ReadAction computeBlocking in a Task Backgroundable is flagged with its own documented reason`() {
+        myFixture.configureByText(
+            "BackgroundTask11.java",
+            """
+            import com.intellij.openapi.application.ReadAction;
+            import com.intellij.openapi.progress.ProgressIndicator;
+            import com.intellij.openapi.progress.Task;
+            import com.intellij.openapi.project.Project;
+
+            class BackgroundTask11 extends Task.Backgroundable {
+                BackgroundTask11(Project project) {
+                    super(project, "Task 11");
+                }
+
+                @Override
+                public void run(ProgressIndicator indicator) {
+                    ReadAction.computeBlocking(() -> 1);
+                }
+            }
+            """.trimIndent(),
+        )
+        val hit = myFixture.doHighlighting().firstOrNull { it.description?.contains("ReadAction.computeBlocking()") == true }
+        assertNotNull(hit)
+        assertTrue(hit!!.description!!.contains("Avoid usage in background threads"))
+        assertFalse(hit.description!!.contains("deprecated, non-cancellable"))
+    }
+
+    /** 0.3.0 fix: computeCancellable throws CannotReadException when a write action is pending -- it does not block. */
+    fun `test ReadAction computeCancellable is not flagged because it gives way to a pending write action`() {
+        myFixture.configureByText(
+            "BackgroundTask12.java",
+            """
+            import com.intellij.openapi.application.ReadAction;
+            import com.intellij.openapi.progress.ProgressIndicator;
+            import com.intellij.openapi.progress.Task;
+            import com.intellij.openapi.project.Project;
+
+            class BackgroundTask12 extends Task.Backgroundable {
+                BackgroundTask12(Project project) {
+                    super(project, "Task 12");
+                }
+
+                @Override
+                public void run(ProgressIndicator indicator) {
+                    ReadAction.computeCancellable(() -> 1);
+                }
+            }
+            """.trimIndent(),
+        )
+        assertFalse(myFixture.doHighlighting().any { it.description?.contains("can block the write lock") == true })
+    }
+
+    /** 0.3.0: the default branch of IntelliJ's own SearchForTestsTask (IDEA-393501) uses this call. */
+    fun `test DumbService runReadActionInSmartMode in a pooled thread task is flagged`() {
+        myFixture.configureByText(
+            "Launcher13.java",
+            """
+            import com.intellij.openapi.application.ApplicationManager;
+            import com.intellij.openapi.project.DumbService;
+            import com.intellij.openapi.project.Project;
+
+            class Launcher13 {
+                void launch(Project project) {
+                    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+                        DumbService.getInstance(project).runReadActionInSmartMode(() -> {});
+                    });
+                }
+            }
+            """.trimIndent(),
+        )
+        assertTrue(myFixture.doHighlighting().any { it.description?.contains("DumbService#runReadActionInSmartMode") == true })
+    }
+
+    /** 0.3.0: S5 -- the code itself declares that the method runs on a background thread. */
+    fun `test a RequiresBackgroundThread method reaching ReadAction run is flagged`() {
+        myFixture.configureByText(
+            "Worker14.java",
+            """
+            import com.intellij.openapi.application.ReadAction;
+            import com.intellij.util.concurrency.annotations.RequiresBackgroundThread;
+
+            class Worker14 {
+                @RequiresBackgroundThread
+                void collect() {
+                    ReadAction.run(() -> {});
+                }
+            }
+            """.trimIndent(),
+        )
+        assertTrue(myFixture.doHighlighting().any { it.description?.contains("@RequiresBackgroundThread method") == true })
+    }
+
+    /** 0.3.0: Tier 2 keeps its own wording after the message rework. */
+    fun `test the Tier 2 message still quotes the Application runReadAction Javadoc`() {
+        myFixture.configureByText(
+            "Launcher15.java",
+            """
+            import com.intellij.openapi.application.ApplicationManager;
+
+            class Launcher15 {
+                void launch() {
+                    ApplicationManager.getApplication().executeOnPooledThread(() -> {
+                        ApplicationManager.getApplication().runReadAction(() -> {});
+                    });
+                }
+            }
+            """.trimIndent(),
+        )
+        val hit = myFixture.doHighlighting().firstOrNull { it.description?.contains("Application#runReadAction") == true }
+        assertNotNull(hit)
+        assertTrue(hit!!.description!!.contains("Avoid using this method directly in applied/plugins code"))
     }
 }

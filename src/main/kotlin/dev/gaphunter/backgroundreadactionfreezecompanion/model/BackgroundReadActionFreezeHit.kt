@@ -10,6 +10,8 @@ import com.intellij.psi.PsiElement
  * where the chain starts. [passesCheckCanceled] is true when the
  * method directly containing the sink call also calls `checkCanceled()`
  * somewhere in its own body (downgrades severity, never suppresses).
+ * [sinkDisplay] names the exact blocking API reached, and [sinkReason]
+ * says why it can freeze, in words that match that API's own source.
  */
 data class BackgroundReadActionFreezeHit(
     val anchor: PsiElement,
@@ -17,4 +19,6 @@ data class BackgroundReadActionFreezeHit(
     val chain: List<String>,
     val passesCheckCanceled: Boolean,
     val entryPointDescription: String,
+    val sinkDisplay: String,
+    val sinkReason: String,
 )

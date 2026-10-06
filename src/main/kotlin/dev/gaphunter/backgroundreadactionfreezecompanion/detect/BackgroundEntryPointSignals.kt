@@ -14,19 +14,28 @@ import com.intellij.psi.util.InheritanceUtil
  * because it's a real, sanctioned way plugins launch background work
  * per the platform's own docs, not a guess. S4 was added after v0.1's
  * original 3-entry list (S1-S3) proved incomplete against the first
- * real `intellij-community` sample checked during Fase 3 validation
+ * real `intellij-community` sample checked during manual validation
  * (`plugins/hg4idea`) -- see [isBackgroundTaskUtilExecuteOnPooledThreadCall].
  *
+ * S5 (0.3.0): a method the code itself annotates with the platform's
+ * `@RequiresBackgroundThread`. Measured on real JetBrains fixes: adding
+ * S5 raised the share of real "blocking read -> cancellable read" fixes
+ * this entry-point list can see.
+ *
  * **Out of scope, stated honestly**: Kotlin coroutines
- * (`Dispatchers.Default`/`IO` -- Kotlin PSI, this catalog's
- * interprocedural machinery is Java-PSI-only), `com.intellij.util.Alarm`,
+ * (`Dispatchers.Default`/`IO` -- JetBrains' own DevKit already reports
+ * blocking calls in suspend contexts), `com.intellij.util.Alarm`,
  * reflection/extension-point invocation, and any `ExecutorService` not
- * obtained from `AppExecutorUtil`. This list grew once already against
- * real code; more real-world gaps of the same shape are plausible.
+ * obtained from `AppExecutorUtil`. Kotlin files are handled by
+ * [KotlinBackgroundReadActionFinder] (0.3.0), not by this Java PSI list.
  */
 object BackgroundEntryPointSignals {
 
     private const val TASK_BACKGROUNDABLE_FQN = "com.intellij.openapi.progress.Task.Backgroundable"
+    private const val REQUIRES_BACKGROUND_THREAD_FQN = "com.intellij.util.concurrency.annotations.RequiresBackgroundThread"
+
+    /** S5: a method annotated with the platform's `@RequiresBackgroundThread`. */
+    fun isRequiresBackgroundThreadMethod(method: PsiMethod): Boolean = method.hasAnnotation(REQUIRES_BACKGROUND_THREAD_FQN)
     private const val APPLICATION_FQN = "com.intellij.openapi.application.Application"
     private const val APP_EXECUTOR_UTIL_FQN = "com.intellij.util.concurrency.AppExecutorUtil"
     private const val BACKGROUND_TASK_UTIL_FQN = "com.intellij.util.concurrency.BackgroundTaskUtil"
@@ -86,7 +95,7 @@ object BackgroundEntryPointSignals {
      * S4: `BackgroundTaskUtil.executeOnPooledThread(Disposable, Runnable)`
      * -- a real, distinct class from `Application#executeOnPooledThread`
      * (S2), NOT part of the original v0.1 closed list. Found during
-     * Fase 3 manual validation against real `intellij-community` code
+     * manual validation against real `intellij-community` code
      * (`HgRepositoryImpl.update()`, `plugins/hg4idea`) -- v0.1's
      * 3-entry-point list proved incomplete against real code on the
      * first real sample checked, added here rather than left as a

@@ -31,6 +31,8 @@ data class ReachabilitySummary(
     val anchor: PsiElement,
     val chain: List<String>,
     val passesCheckCanceled: Boolean,
+    val sinkDisplay: String,
+    val sinkReason: String,
 )
 
 /**
@@ -161,13 +163,15 @@ object ProjectReadActionReachabilityAnalyzer {
                 super.visitMethodCallExpression(call)
                 if (result != null) return
 
-                val tier = ReadActionSinkSignals.sinkTierOf(call)
-                if (tier != null) {
+                val sink = ReadActionSinkSignals.sinkOf(call)
+                if (sink != null) {
                     result = ReachabilitySummary(
-                        tier = tier,
+                        tier = sink.tier,
                         anchor = call.methodExpression.referenceNameElement ?: call.methodExpression,
                         chain = emptyList(),
                         passesCheckCanceled = CheckCanceledSignals.containsCheckCanceled(body),
+                        sinkDisplay = sink.display,
+                        sinkReason = sink.reason,
                     )
                     return
                 }

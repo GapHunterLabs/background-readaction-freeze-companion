@@ -1,0 +1,17 @@
+<html>
+<body>
+Reports Kotlin code that runs on a background thread and reaches a blocking, non-cancellable read action.
+<p>A background entry point is a <code>Task.Backgroundable</code> <code>run(ProgressIndicator)</code> override, a function
+annotated <code>@RequiresBackgroundThread</code>, or a task passed to <code>executeOnPooledThread</code>,
+<code>AppExecutorUtil</code>'s executors or <code>runBackgroundableTask</code>. The blocking calls are
+<code>ReadAction.compute()</code>/<code>run()</code>/<code>computeBlocking()</code>/<code>runBlocking()</code>,
+<code>runReadAction {}</code>, <code>runReadActionBlocking {}</code>,
+<code>DumbService#runReadActionInSmartMode(...)</code> and <code>Application#runReadAction(...)</code>.</p>
+<p>While such a read action runs, a pending write action waits for it, and write actions usually run on the UI thread:
+the IDE freezes. Use <code>ReadAction.nonBlocking(...).executeSynchronously()</code> or <code>readAction {}</code> instead.
+A non-blocking read action restarts when a write action comes, so keep side effects (writing files, scheduling UI work)
+outside of it.</p>
+<p>Calls are followed into functions of the same file only. Code inside <code>invokeLater</code>, write actions,
+<code>ReadAction.nonBlocking</code> or <code>readAction {}</code> is not reported.</p>
+</body>
+</html>

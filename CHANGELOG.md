@@ -4,10 +4,30 @@
 
 ## [Unreleased]
 
+## [0.3.0]
+
 ### Added
 
+- Kotlin support: a second inspection reports Kotlin code that runs on a
+  background thread and reaches a blocking read action. It follows calls
+  into functions of the same file and works the same in K1 and K2 mode.
+- New blocking calls, verified against the current IntelliJ Platform
+  source: `ReadAction.computeBlocking()`/`runBlocking()`,
+  `runReadActionBlocking {}`, the top-level `runReadAction {}` and
+  `DumbService#runReadActionInSmartMode(...)`.
+- New entry point: a method or function annotated
+  `@RequiresBackgroundThread`.
+- Each warning names the exact blocking call and quotes the reason that
+  applies to it. `computeBlocking()` and `Application#runReadAction(...)`
+  are never described as deprecated, because they are not.
 - A description page for the inspection in **Settings | Editor |
   Inspections**, which showed "Under construction".
+
+### Fixed
+
+- `ReadAction.computeCancellable()` is no longer reported. It gives way to
+  a pending write action (it throws `CannotReadException`), so it does not
+  block the write lock. Earlier versions reported it by mistake.
 
 ### Changed
 
@@ -33,8 +53,8 @@
   (`ProgressManager.checkCanceled()`) once per file and once per
   fixed-point iteration -- a large real project could previously block
   the read action uncancellably while the user kept typing. The same
-  catalog-wide gap this plugin's own analysis is built to catch, found
-  missing in this plugin's own engine during a Workstream 1 review.
+  kind of gap this plugin's own analysis is built to catch, found
+  missing in this plugin's own engine during an internal review.
 
 ## [0.2.0]
 
@@ -60,7 +80,8 @@
 - Downgrades, rather than suppresses, a hit where the same method also
   checks for cancellation explicitly.
 
-[Unreleased]: https://github.com/GapHunterLabs/background-readaction-freeze-companion/compare/0.2.2...HEAD
+[Unreleased]: https://github.com/GapHunterLabs/background-readaction-freeze-companion/compare/0.3.0...HEAD
+[0.3.0]: https://github.com/GapHunterLabs/background-readaction-freeze-companion/compare/0.2.2...0.3.0
 [0.2.2]: https://github.com/GapHunterLabs/background-readaction-freeze-companion/compare/0.2.1...0.2.2
 [0.2.1]: https://github.com/GapHunterLabs/background-readaction-freeze-companion/compare/0.2.0...0.2.1
 [0.2.0]: https://github.com/GapHunterLabs/background-readaction-freeze-companion/compare/0.1.0...0.2.0

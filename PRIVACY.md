@@ -19,11 +19,11 @@ in memory for as long as the IDE is open.
 
 To decide when to show its one-time rating prompt, the plugin keeps two values
 in the IDE's own settings on your computer: whether you have answered the
-prompt, and a list of up to 500 findings it has already counted. Until the
-next release, each entry in that list is the file path and line of a finding,
-sometimes with its message. From the next release on, each entry is a one-way
-fingerprint that cannot be turned back into a path, and the old list is
-deleted. None of this is ever sent anywhere.
+prompt, and a list of up to 500 findings it has already counted. Each entry in
+that list is a one-way fingerprint that cannot be turned back into a path.
+Versions up to 0.2.2 kept the file path and line of each finding instead,
+sometimes with its message; version 0.3.0 deletes that old list. None of this
+is ever sent anywhere.
 
 ## Network access
 

@@ -5,18 +5,23 @@
     <vendor>Gap Hunter Labs</vendor>
     <description><![CDATA[
         <p>Flags a background-thread entry point (a `Task.Backgroundable`
-        override, an `Application#executeOnPooledThread(...)` task, a
-        task submitted to `AppExecutorUtil`'s pooled executor, or a task
-        passed to `BackgroundTaskUtil#executeOnPooledThread(...)`) that
-        can reach a blocking, non-cancellable read-lock call -- either
-        directly, or transitively through a project method whose own
-        summary already proves it. Two tiers, both verified against the
-        real `intellij-community` source rather than assumed: Tier 1
-        (`ReadAction.compute()`/`run()`/`computeCancellable()`) is
-        formally `@Deprecated`; Tier 2 (`Application#runReadAction(...)`)
+        override, a method annotated `@RequiresBackgroundThread`, an
+        `Application#executeOnPooledThread(...)` task, a task submitted
+        to `AppExecutorUtil`'s pooled executor, or a task passed to
+        `BackgroundTaskUtil#executeOnPooledThread(...)`) that can reach a
+        blocking, non-cancellable read-lock call -- either directly, or
+        transitively through a project method whose own summary already
+        proves it. Java and Kotlin. Every sink is verified against the
+        real `intellij-community` source, and each warning quotes the
+        reason that applies to that exact API: `ReadAction.compute()`/
+        `run()` are deprecated; `ReadAction.computeBlocking()`/
+        `runBlocking()` and `runReadActionBlocking {}` are not deprecated,
+        but their own documentation says "Avoid usage in background
+        threads as it will likely cause UI freezes";
+        `DumbService#runReadActionInSmartMode(...)` runs a blocking read
+        action after smart mode starts; `Application#runReadAction(...)`
         is not formally deprecated, but its own Javadoc says "Avoid
-        using this method directly in applied/plugins code" -- it's the
-        same blocking, non-cancellable read lock underneath.</p>
+        using this method directly in applied/plugins code".</p>
         <p>Motivated by JetBrains' own Platform Blog: "Investigating
         IntelliJ Platform UI Freezes" (Sept 2025) and "UI Freezes and
         the Dangers of Non-Cancellable Read Actions in Background
@@ -36,19 +41,32 @@
         `BackgroundTaskUtil#executeOnPooledThread` entry point missing
         from the original 3-entry list -- added rather than left as a
         documented gap.</p>
-        <p>Stated honestly: Java PSI only (no Kotlin coroutines --
-        `Dispatchers.Default`/`IO` entry points are out of scope);
-        `call.resolveMethod()` resolves a virtual call to a single
-        candidate (no CHA, no points-to, same caveat already accepted
-        catalog-wide); a project with more than 3,000 analyzable methods
-        skips analysis entirely; a hit where the same method also calls
-        `checkCanceled()` is downgraded to a weaker warning, not
-        suppressed -- the write lock can still block.</p>
+        <p>The same rule, applied to IntelliJ's own source, found the
+        blocking read actions reported as IDEA-393501
+        (`SearchForTestsTask`) and IJPL-257836
+        (`DependenciesUsagesPanel`).</p>
+        <p>Stated honestly: Java code is analyzed across the whole
+        project; Kotlin code follows calls only into functions of the
+        same file, matched by name (it works the same in K1 and K2 mode).
+        Kotlin coroutine entry points are out of scope -- JetBrains' own
+        DevKit already reports blocking calls in suspend contexts.
+        `call.resolveMethod()` resolves a virtual Java call to a single
+        candidate (no CHA, no points-to); a project with more than 3,000
+        analyzable Java methods skips the Java analysis; a hit where the
+        same method also calls `checkCanceled()` is downgraded to a
+        weaker warning, not suppressed -- the write lock can still
+        block. `ReadAction.computeCancellable()` is not reported since
+        0.3.0: it gives way to a pending write action.</p>
         <p>Free. No license nags, no telemetry, no network calls.</p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.java</depends>
+    <depends>org.jetbrains.kotlin</depends>
+
+    <extensions defaultExtensionNs="org.jetbrains.kotlin">
+        <supportsKotlinPluginMode supportsK1="true" supportsK2="true"/>
+    </extensions>
 
     <extensions defaultExtensionNs="com.intellij">
         <localInspection language="JAVA"
@@ -57,6 +75,12 @@
             enabledByDefault="true"
             level="WARNING"
             implementationClass="dev.gaphunter.backgroundreadactionfreezecompanion.inspection.BackgroundReadActionFreezeInspection"/>
+        <localInspection language="kotlin"
+            groupName="Background ReadAction Freeze Companion"
+            displayName="Background thread reaches a non-cancellable ReadAction (Kotlin)"
+            enabledByDefault="true"
+            level="WARNING"
+            implementationClass="dev.gaphunter.backgroundreadactionfreezecompanion.inspection.KotlinBackgroundReadActionFreezeInspection"/>
         <notificationGroup id="Background ReadAction Freeze Companion" displayType="BALLOON"/>
     </extensions>
 </idea-plugin>

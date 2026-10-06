@@ -69,46 +69,81 @@ background thread. It was reported to JetBrains as
 [IDEA-393501](https://youtrack.jetbrains.com/issue/IDEA-393501) --
 "SearchForTestsTask: non-cancellable ReadAction.run() in a background
 task" (originally IJPL-254654). At the time of writing it is open: a
-reported finding, not a confirmed defect.
+reported finding, not a confirmed defect. A later re-check showed that
+the default (smart-mode) branch also blocks, through
+`DumbService#runReadActionInSmartMode`.
+
+The same rule, run as a scan over IntelliJ's own `master`, also led to
+[IJPL-257836](https://youtrack.jetbrains.com/issue/IJPL-257836):
+`DependenciesUsagesPanel.findUsages()` runs the whole dependency usage
+search in one blocking read action on a pooled thread. Also open at the
+time of writing.
 
 ## Stated honestly -- scope
 
-- **Java PSI only.** No Kotlin coroutines (`Dispatchers.Default`/`IO`) --
-  this catalog's interprocedural machinery has never been extended to
-  Kotlin PSI. A real, declared limitation, not a silent gap.
-- **Four background entry points, a closed list**: a `Task.Backgroundable`
-  `run(ProgressIndicator)` override, a task passed to
+- **Java and Kotlin, with different depth.** Java code is analyzed across
+  the whole project (interprocedural, see above). Kotlin code (since
+  0.3.0) is matched by name, receiver and imports, and follows calls only
+  into functions of the same file. It works the same in K1 and K2 mode.
+  A Kotlin call into another file, or into Java code, is not followed.
+- **Kotlin coroutines are out of scope on purpose.** JetBrains' own DevKit
+  already reports blocking calls in suspend contexts
+  (`ForbiddenInSuspectContextMethodInspection`). This plugin covers the
+  non-suspend background entry points that no inspection covers.
+- **Background entry points, a closed list**: a `Task.Backgroundable`
+  `run(ProgressIndicator)` override, a method annotated
+  `@RequiresBackgroundThread`, a task passed to
   `Application#executeOnPooledThread(...)`, a task submitted to
   `AppExecutorUtil`'s pooled executor (one hop of variable indirection
-  resolved, no deeper alias tracking), or a task passed to
-  `BackgroundTaskUtil#executeOnPooledThread(...)`. This list already grew
-  once against real code -- more gaps of the same shape are plausible.
-  Not `com.intellij.util.Alarm`, not reflection/extension-point
-  invocation, not a custom `ExecutorService`.
-- **Two sink tiers, verified against the real `intellij-community` source**,
-  not assumed: Tier 1 (`ReadAction.compute()`/`run()`/`computeCancellable()`)
-  is formally `@Deprecated`. Tier 2 (`Application#runReadAction(...)`) is
-  **not** formally deprecated -- its own Javadoc says "Avoid using this
-  method directly in applied/plugins code", but this plugin never calls
-  it "deprecated". Getting this distinction right matters more here than
-  in any other plugin in this catalog: the intended audience includes the
-  people who wrote the real source.
+  resolved, no deeper alias tracking), a task passed to
+  `BackgroundTaskUtil#executeOnPooledThread(...)`, and (Kotlin) a task
+  passed to `runBackgroundableTask(...)`. This list already grew twice
+  against real code -- more gaps of the same shape are plausible. Not
+  `com.intellij.util.Alarm`, not reflection/extension-point invocation,
+  not a custom `ExecutorService`.
+- **Sinks, verified against the real `intellij-community` source**, not
+  assumed. Each warning quotes the reason that applies to that exact
+  call:
+  - `ReadAction.compute()`/`run()` -- formally `@Deprecated`.
+  - `ReadAction.computeBlocking()`/`runBlocking()` and
+    `runReadActionBlocking {}` -- **not** deprecated; their own
+    documentation says "Avoid usage in background threads as it will
+    likely cause UI freezes".
+  - `DumbService#runReadActionInSmartMode(...)` -- waits for smart mode,
+    then runs a blocking read action.
+  - The top-level Kotlin `runReadAction {}` -- deprecated in current
+    platform versions, where it delegates to `runReadActionBlocking`.
+  - `Application#runReadAction(...)` (Tier 2) -- **not** formally
+    deprecated; its own Javadoc says "Avoid using this method directly in
+    applied/plugins code", and this plugin never calls it "deprecated".
+
+  Getting these distinctions right matters more here than in any other
+  plugin in this catalog: the intended audience includes the people who
+  wrote the real source.
+- **`ReadAction.computeCancellable()` is not reported** (fixed in 0.3.0).
+  It throws `CannotReadException` when a write action is pending, so it
+  does not block the write lock. Earlier versions reported it by mistake.
 - **No CHA, no points-to.** `call.resolveMethod()` resolves a virtual call
   to one candidate -- same caveat already accepted catalog-wide.
 - **`checkCanceled()` downgrades, never suppresses.** A hit where the same
   method also calls `ProgressManager`/`ProgressIndicatorProvider`/
   `ProgressIndicator#checkCanceled()` is reported at lower severity, not
   hidden -- the write lock can still block until the next poll.
-- A project with more than 3,000 analyzable methods skips analysis
-  entirely rather than risk pathological cost.
+- A project with more than 3,000 analyzable Java methods skips the Java
+  analysis entirely rather than risk pathological cost. The Kotlin check
+  works per file and has no such limit.
 
 ## Usage
 
-Install the plugin, open a Java-based IntelliJ plugin project. Any
-`Task.Backgroundable.run()` override, `executeOnPooledThread(...)` task,
-or `AppExecutorUtil`-submitted task that reaches a non-cancellable
-ReadAction call is flagged inline, with the real call chain named in the
-message.
+Install the plugin, open a Java or Kotlin IntelliJ plugin project. Any
+background entry point from the list above that reaches a
+non-cancellable read action is flagged inline, with the real call chain
+and the reason for that exact call named in the message.
+
+When you fix a hit, keep side effects out of the read action:
+`ReadAction.nonBlocking(...)` restarts when a write action comes, so
+anything that writes files or schedules UI work runs again on each
+restart.
 
 ## Support
 

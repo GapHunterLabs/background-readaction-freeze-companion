@@ -35,9 +35,13 @@ object BackgroundReadActionFreezeFinder {
         file.accept(object : JavaRecursiveElementWalkingVisitor() {
             override fun visitMethod(method: PsiMethod) {
                 super.visitMethod(method)
-                if (!BackgroundEntryPointSignals.isBackgroundableRunOverride(method)) return
+                val description = when {
+                    BackgroundEntryPointSignals.isBackgroundableRunOverride(method) -> "This Task.Backgroundable.run(ProgressIndicator) override"
+                    BackgroundEntryPointSignals.isRequiresBackgroundThreadMethod(method) -> "This @RequiresBackgroundThread method"
+                    else -> return
+                }
                 val summary = summaries[MethodKey.of(method)] ?: return
-                hits += toHit(summary, "This Task.Backgroundable.run(ProgressIndicator) override")
+                hits += toHit(summary, description)
             }
 
             override fun visitMethodCallExpression(call: PsiMethodCallExpression) {
@@ -63,5 +67,7 @@ object BackgroundReadActionFreezeFinder {
         chain = summary.chain,
         passesCheckCanceled = summary.passesCheckCanceled,
         entryPointDescription = description,
+        sinkDisplay = summary.sinkDisplay,
+        sinkReason = summary.sinkReason,
     )
 }

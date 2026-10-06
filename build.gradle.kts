@@ -14,6 +14,7 @@ dependencies {
         intellijIdea("2025.2.6.2")
 
         bundledPlugin("com.intellij.java")
+        bundledPlugin("org.jetbrains.kotlin")
 
         testFramework(TestFrameworkType.Platform)
     }
