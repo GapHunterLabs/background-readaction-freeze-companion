@@ -5,6 +5,8 @@ reach a blocking, non-cancellable read-lock call -- the pattern JetBrains'
 own Platform team has publicly named as a real, recurring cause of IDE
 freezes, with no static tooling to catch it today.
 
+![Background ReadAction Freeze Companion](docs/media/hero.gif)
+
 ## Why it exists
 
 Not the usual "a paid competitor's users are complaining" story this
